@@ -13,7 +13,7 @@ provider "azurerm" {
 }
 
 // data "azurerm_resource_group" "main" {
-//     name     = "TerraformMgInfoDemo"
+//     name     = "TerraformDataSource"
 // }
 
 // resource "azurerm_service_plan" "main" {
