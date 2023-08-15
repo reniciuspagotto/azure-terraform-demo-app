@@ -1,0 +1,97 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - src/*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: 'Release'
+
+stages:
+
+- stage: 'Build'
+
+  jobs:
+  - job: Build
+
+    workspace:
+      clean: all
+
+    steps:
+
+      - task: UseDotNet@2
+        displayName: "Install .NET Core 7.x"
+        inputs:
+          packageType: 'sdk'
+          version: '7.0.x'
+          installationPath: $(Agent.ToolsDirectory)/dotnet
+        
+      - task: DotNetCoreCLI@2
+        displayName: "NuGet Restore"
+        inputs:
+          command: restore
+          projects: '**/*.csproj'
+
+      - task: DotNetCoreCLI@2
+        displayName: "Build Solution"
+        inputs:
+          command: build
+          projects: '**/*.csproj'
+          arguments: '--configuration $(buildConfiguration)'
+
+- stage: 'Publish'
+
+  jobs:
+  - job: Publish
+
+    workspace:
+      clean: all
+
+    steps:
+
+      - task: DotNetCoreCLI@2
+        displayName: "Publish Artifact"
+        inputs:
+          command: publish
+          publishWebProjects: false
+          arguments: '--configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+          zipAfterPublish: True
+
+      - task: PublishBuildArtifacts@1
+        displayName: "Upload Artifacts"
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'terraformappdemo'
+          publishLocation: 'Container'
+
+- stage: 'Deploy'
+
+  jobs:
+  - job: Deploy
+
+    steps:
+
+      - task: DownloadBuildArtifacts@1
+        inputs:
+          buildType: 'current'
+          downloadType: 'single'
+          artifactName: 'terraformappdemo'
+          downloadPath: '$(System.ArtifactsDirectory)'
+
+      - task: AzureRmWebAppDeployment@4
+        inputs:
+          ConnectionType: 'AzureRM'
+          azureSubscription: 'MVP Subscription(563efcd7-bd1e-41de-b5c3-6950a9b7d863)'
+          appType: 'webApp'
+          WebAppName: 'terraform-demo-appservice'
+          packageForLinux: '$(Build.ArtifactStagingDirectory)/**/*.zip'

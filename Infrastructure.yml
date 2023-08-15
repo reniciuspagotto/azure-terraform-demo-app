@@ -1,0 +1,114 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+resources:
+  repositories:
+  - repository: TerraformDemoApp
+    type: git
+    name: TerraformDemoApp
+
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - iac/*
+    - Infrastructure.yml
+    
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: 'Release'
+
+stages:
+
+- stage: 'Init_Plan'
+
+  jobs:
+  - job:
+    displayName: "Terraform Init and Plan"
+
+    workspace:
+      clean: all
+
+    steps:
+
+      - task: TerraformInstaller@1
+        displayName: 'Install Terraform version'
+        inputs:
+          terraformVersion: 'latest'
+          
+      - task: TerraformTaskV4@4
+        displayName: 'Terraform Init'
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/iac'
+          backendServiceArm: 'MVP Subscription(563efcd7-bd1e-41de-b5c3-6950a9b7d863)'
+          backendAzureRmResourceGroupName: 'RecDevTerraform'
+          backendAzureRmStorageAccountName: 'recdevterraform'
+          backendAzureRmContainerName: 'terraformstate'
+          backendAzureRmKey: 'terraform.tfstate'
+          
+      - task: TerraformTaskV4@4
+        displayName: 'Terraform Validate'
+        inputs:
+          provider: 'azurerm'
+          command: 'validate'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/iac'
+        
+      - task: TerraformTaskV4@4
+        displayName: 'Terraform Plan'
+        inputs:
+          provider: 'azurerm'
+          command: 'plan'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/iac'
+          commandOptions: '-out="main.tfplan"'
+          environmentServiceNameAzureRM: 'MVP Subscription(563efcd7-bd1e-41de-b5c3-6950a9b7d863)'
+
+
+- stage: 'Apply'
+
+  jobs:
+  - deployment: 
+    environment: 'Terraform-Approval'
+    displayName: "Terraform Apply"
+    
+    workspace:
+      clean: all
+
+    strategy:
+        runOnce:
+          deploy:
+            steps:
+
+            - checkout: TerraformDemoApp
+            
+            - task: TerraformInstaller@1
+              displayName: 'Install Terraform version'
+              inputs:
+                terraformVersion: 'latest'
+            
+            - task: TerraformTaskV4@4
+              displayName: 'Terraform Init'
+              inputs:
+                provider: 'azurerm'
+                command: 'init'
+                workingDirectory: '$(System.DefaultWorkingDirectory)/iac'
+                commandOptions: '-backend-config=client_secret=$(ARM_ACCESS_KEY)'
+                backendServiceArm: 'MVP Subscription(563efcd7-bd1e-41de-b5c3-6950a9b7d863)'
+                backendAzureRmResourceGroupName: 'RecDevTerraform'
+                backendAzureRmStorageAccountName: 'recdevterraform'
+                backendAzureRmContainerName: 'terraformstate'
+                backendAzureRmKey: 'terraform.tfstate'
+                
+            - task: TerraformTaskV4@4
+              displayName: 'Terraform Apply'
+              inputs:
+                provider: 'azurerm'
+                command: 'apply'
+                workingDirectory: '$(System.DefaultWorkingDirectory)/iac'
+                environmentServiceNameAzureRM: 'MVP Subscription(563efcd7-bd1e-41de-b5c3-6950a9b7d863)'
